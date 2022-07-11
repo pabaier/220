@@ -1,10 +1,12 @@
-import random
 import re
 import sys
 from io import StringIO
-from types import LambdaType
 
 from pylint import epylint as lint
+
+from tests.helpers import score_to_letter, gen, get_all_numbers_in_string
+from tests.liststream import ListStream
+from tests.test import Test
 
 
 class TestItem:
@@ -22,31 +24,23 @@ class TestItem:
         pass
 
 
-class Test(TestItem):
-    def __init__(self, name, actual=None, expected=None, data=None, points=None, fail_fast=False,
-                 show_actual_expected=True, exception_message=None, comp_func=None, **kwargs):
+class TestDisplay(TestItem):
+    def __init__(self, test: Test, name, points=None, fail_fast=False, show_actual_expected=True, message=None,
+                 **kwargs):
         """
-        A Test in a Test Suite.
-
+        Display a Test.
+        :param test: the test
         :param name: the name of the test
-        :param actual: the value being checked. can be a value or a lambda function
-        :param expected: the correct value
-        :param data: the data used to generate the test
         :param points: the amount of points the test is worth
         :param fail_fast: exit the test suit if the test fails
         :param show_actual_expected: show the actual and expected values if a test fails
-        :param exception_message: a message to be displayed if an exception is thrown
-        :param comp_func: a function used to check if the test passes or fails
-                          should take 2 parameters (actual, expected) and return a bool representing pass/fail
+        :param message: a list of messages to be displayed on failure
         """
         super().__init__(name, points)
-        self.actual = actual
-        self.expected = expected
-        self.data = data
+        self.test = test
         self.fail_fast = fail_fast
         self.show_actual_expected = show_actual_expected
-        self.exception_message = exception_message
-        self.comp_func = comp_func
+        self.message = message
         self.letter_grades = True if 'letter_grades' not in kwargs else kwargs['letter_grades']
 
     def passed(self):
@@ -56,7 +50,7 @@ class Test(TestItem):
         grade = '\N{check mark}' if self.letter_grades else f'+{self.total_points}'
         print(f"{tabs}PASSED: {grade} - {self.name}")
 
-    def failed(self, result, e=None):
+    def failed(self):
         """
         e is an exception. this would happen when running tests on functions.
         if an exception occurs, we do not show the actual and expected values
@@ -67,41 +61,28 @@ class Test(TestItem):
         print(f'{tabs}FAILED: {grade} - {self.name}')
         if self.fail_fast:
             sys.exit()
-        if e:
+        if self.test.exception:
             print(f'{tabs}\tan exception was thrown while running this test:')
-            print(f'{tabs}\t\t\t{e}')
-            if self.exception_message:
-                print(f'{tabs}\t{self.exception_message}')
-        else:
-            if self.exception_message:
-                print(f'{tabs}\t{self.exception_message}')
-            if self.show_actual_expected:
-                print(f'{tabs}\tactual: {result} | expected: {self.expected}')
-            if self.data:
-                print(f'{tabs}\tdata:')
-                for line in self.data:
-                    print(f'{tabs}\t\t{line}')
+            print(f'{tabs}\t\t\t{self.test.exception}')
+        if self.message:
+            for line in self.message:
+                print(f'{tabs}\t{line}')
+        if self.show_actual_expected:
+            print(f'{tabs}\tactual: {self.test.get_actual()} | expected: {self.test.get_expected()}')
+        if self.test.get_input():
+            print(f'{tabs}\tdata:')
+            print(f'{tabs}\t\t{self.test.get_input()}')
+        if self.test.get_params():
+            print(f'{tabs}\tparameters:')
+            print(f'{tabs}\t\t{self.test.get_params()}')
 
     def run(self, level=1):
         self.level = level
-        try:
-            result = self.actual
-            if isinstance(self.actual, LambdaType):
-                result = self.actual()
-            if self.comp_func:
-                outcome = self.comp_func(result, self.expected)
-            else:
-                outcome = result == self.expected
-            if outcome:
-                self.passed()
-            else:
-                self.failed(result)
-        except Exception as e:
-            self.failed(None, e=e)
 
-    def fail_fast(self):
-        self.fail_fast = True
-        return self
+        if self.test.passed:
+            self.passed()
+        else:
+            self.failed()
 
 
 class Section(TestItem):
@@ -236,7 +217,6 @@ class TestBuilder:
 
         test_intro = f' Starting test {self.name} '
         print('{0}{1:=^80}'.format(tabs, test_intro))
-        print()
         for item in self.outline:
             if item.default_points is None:
                 item.default_points = self.default_test_points
@@ -290,32 +270,6 @@ class TestSuit:
         print('{0:=^80}'.format(test_outro))
 
 
-def score_to_letter(score: float):
-    if score >= 93:
-        return 'A'
-    if score >= 90:
-        return 'A-'
-    if score >= 87:
-        return 'B+'
-    if score >= 83:
-        return 'B'
-    if score >= 80:
-        return 'B-'
-    if score >= 77:
-        return 'C+'
-    if score >= 73:
-        return 'C'
-    if score >= 70:
-        return 'C-'
-    if score >= 67:
-        return 'D+'
-    if score >= 63:
-        return 'D'
-    if score >= 60:
-        return 'D-'
-    return 'F'
-
-
 def run_safe(test):
     """
     helper function to try running a function
@@ -336,68 +290,39 @@ def create_lint_test():
         (pylint_stdout, pylint_stderr) = lint.py_run(f'{test_file} --rcfile {rc_file}', return_std=True)
         output = pylint_stdout.getvalue()
         error_list = output.split("\n")[1:-1]
-        # case when the errors exceed the possible points
-        error_range = range(len(error_list))
-        if points < len(error_list):
-            error_range = range(points)
-        for i in error_range:
-            linting.add_items(Test(error_list[i], None, 1, points=1, show_actual_expected=False))
-        if points < len(error_list):
+        if error_list:
+            test_points = len(error_list)
+            error_message = error_list[:10]
+            if len(error_list) > points:
+                error_message.append(f'...and {len(error_list) - 10} more errors')
+                test_points = points
             linting.add_items(
-                Test(f'...and {len(error_list) - points} more errors', None, 1, points=0, show_actual_expected=False))
+                TestDisplay(Test(lambda: None, True).run(), "Linting Errors", points=test_points, show_actual_expected=False,
+                            message=error_message))
+        else:
+            linting.add_items(
+                TestDisplay(Test(lambda: None, None).run(), "Linting", points=0, show_actual_expected=False))
+
         return linting
 
     return create_lint_section
 
 
 def create_blacklist_test():
-    def create_blacklist_code_analyzer(x) -> list[Test]:
+    def create_blacklist_code_analyzer(x):
         blacklist, test_file = x
-        tests = []
+        exiting = False
         with open(test_file, 'r') as file:
             for index, line in enumerate(file):
                 for blacklist_item in blacklist:
                     res = re.search(blacklist_item, line)
                     if res:
                         culprit = res.group()
-                        tests.append(Test(f'Line {index + 1} - {culprit} - {blacklist[blacklist_item]}', 0, 1,
-                                          show_actual_expected=False, points=100))
-            try:
-                tests[-1].fail_fast = True
-            except IndexError:
-                pass
-        for item in tests:
-            item.run()
-
+                        print(f'Line {index + 1} - {culprit} - {blacklist[blacklist_item]}')
+                        exiting = True
+        if exiting:
+            sys.exit(1)
     return create_blacklist_code_analyzer
-
-
-def gen(lst):
-    """
-    used for looping through test input and results
-    this will lazily get the value of lst and feed it to a lazily called function
-    (like a lambda)
-    result is used with next method
-    ex: user_in = gen([1,2,3])
-        element = next(user_in)
-    """
-    i = 0
-    while True:
-        yield lst[i % len(lst)]
-        i += 1
-
-
-class ListStream:
-    def __init__(self):
-        self.data = []
-
-    def write(self, s: str):
-        if s == '\n':
-            return
-        self.data += s.split('\n')
-
-    def flush(self, *args):
-        pass
 
 
 def get_IO(func, input: list[str] = None):
@@ -432,27 +357,6 @@ def get_IO(func, input: list[str] = None):
     sys.stdin = sys.__stdin__
     # output = output.getvalue().splitlines()
     return (output, res, error)
-
-
-# TODO: Remove this
-def IO_Test(test: Test, input=None, expected_return=None):
-    func = test.actual
-    expected = test.expected
-    output, result, error = get_IO(func, input)
-    if error:
-        return Test(test.name, f'error: {error}', expected)
-
-
-def get_all_numbers_in_string(line):
-    """
-    given a string (like IO output from a program)
-    this will collect all the numbers in the string and return them as a list
-    """
-    # \d+ matched one or more digit
-    # \. escapes the . so it is treated like a decimal
-    # | logical or
-    # so this gets floats | ints
-    return re.findall("\d+\.\d+|\d+", line)
 
 
 def build_IO_section(name, tests, expected, dynamic_tests, test_func, test_all_output=False, error_range=None,
@@ -536,36 +440,26 @@ def build_IO_string_section(name, tests, expected, dynamic_tests, test_func, num
             test = Test(test_name, True, False, exception_message='No output',
                         data=[f'inputs: {tests[i]}', f'expected: {ex}'], show_actual_expected=False)
         else:
-            final_output = ''.join(output[num_inputs:])
+            final_output = ''.join(output)
+            exp = ex \
+                .replace('\\', '\\\\') \
+                .replace('{', '\{') \
+                .replace('[', '\[') \
+                .replace(']', '\]') \
+                .replace('(', '\(') \
+                .replace(')', '\)') \
+                # .replace('.', '\.')\
+            # .replace('^', '\^')\
+            # .replace('$', '\$')\
+            # .replace('*', '\*')\
+            # .replace('+', '\+')\
+            # .replace('|', '\|')
+            res = re.search(f'.*{exp}.*', final_output)
             try:
-                test = Test(test_name, final_output, ex, data=[f'inputs: {tests[i]}'], comp_func=comp_func)
+                test = Test(test_name, not res == None, True, show_actual_expected=False,
+                            data=[f'could not find {ex} in {final_output}', f'inputs: {tests[i]}'],
+                            comp_func=comp_func)
             except:
                 test = Test(test_name, f'error: incorrect output', ex, data=[f'inputs: {tests[i]}'])
         section.add_items(test)
     return section
-
-
-def get_random_letter():
-    return random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
-
-
-def get_random_string(min=1, max=7):
-    output = ''
-    length = random.randint(min, max)
-    for i in range(length):
-        output += get_random_letter()
-    return output
-
-
-def make_random_sentence(words=5, word_min=1, word_max=7):
-    sentence = []
-    for i in range(words):
-        sentence.append(get_random_string(word_min, word_max))
-    return ' '.join(sentence)
-
-
-def delta_comp_func(error_range):
-    def a(actual, expected):
-        return abs(float(actual) - float(expected)) < error_range
-
-    return a
