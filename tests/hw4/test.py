@@ -1,6 +1,10 @@
+import os
+from pathlib import Path
+
 from tests import test_framework as t
 from tests.hw4.test_data import *
 
+test_file = Path(os.path.dirname(hw4.__file__)) / 'hw4.py'
 
 
 def main():
@@ -21,6 +25,7 @@ def build_pi_tests(n):
     tests = pi2_tests(n)
     section.add_items(*[t.TestDisplay(test, f'test {i + 1}') for i, test in enumerate(tests)])
     return section
+
 
 if __name__ == '__main__':
     main()

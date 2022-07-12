@@ -2,6 +2,8 @@ from helpers import build_test
 from tests.hw7.test_data import *
 from tests.test_framework import *
 
+test_file = Path(os.path.dirname(hw7.__file__)) / 'hw7.py'
+
 TEST_DIR = Path(os.path.dirname(__file__))
 HW_DIR = Path(os.path.dirname(hw7.__file__)) / 'tests'
 if not os.path.isdir(HW_DIR):
@@ -9,7 +11,7 @@ if not os.path.isdir(HW_DIR):
 
 
 def main():
-    builder = TestBuilder("hw 7", 'hw7.py', linter_points=20, default_test_points=2)
+    builder = TestBuilder("hw 7", test_file, linter_points=20, default_test_points=2)
     builder.add_to_blacklist({
         'if (?!__name__).*:': 'if statements not allowed for this assignment. please remove it to continue',
         'while.*:': 'while loops not allowed for this assignment. please remove it to continue',

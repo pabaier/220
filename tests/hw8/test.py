@@ -1,10 +1,14 @@
+from pathlib import Path
+
 from helpers import build_test
 from tests.hw8.test_data import *
 from tests.test_framework import *
 
+test_file = Path(os.path.dirname(hw8.__file__)) / 'hw8.py'
+
 
 def main():
-    builder = TestBuilder("hw 8", 'hw8.py', linter_points=20, default_test_points=2)
+    builder = TestBuilder("hw 8", test_file, linter_points=20, default_test_points=2)
     builder.add_to_blacklist({
         'while.*:': 'while loops not allowed for this assignment. please remove it to continue',
     })

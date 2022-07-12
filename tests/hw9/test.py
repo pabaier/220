@@ -2,9 +2,11 @@ from helpers import build_test
 from tests.hw9.test_data import *
 from tests.test_framework import *
 
+test_file = Path(os.path.dirname(hw9.__file__)) / 'hw9.py'
+
 
 def main():
-    builder = TestBuilder("hw 9", 'hw9.py', linter_points=20, default_test_points=2)
+    builder = TestBuilder("hw 9", test_file, linter_points=20, default_test_points=2)
     builder.add_items(build_get_words_test(10))
     builder.add_items(build_get_random_word_test(10))
     builder.add_items(build_letter_in_secret_word_test(10))

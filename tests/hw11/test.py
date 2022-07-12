@@ -1,12 +1,18 @@
+from pathlib import Path
+
+from assignments.hw11 import sales_person
 from helpers import build_test
 from tests.hw11.test_data import *
 from tests.test_framework import *
 
+person_test_file = Path(os.path.dirname(sales_person.__file__)) / 'sales_person.py'
+force_test_file = Path(os.path.dirname(sales_person.__file__)) / 'sales_force.py'
+
 
 def main():
     test_suit = TestSuit('HW 11')
-    sales_person_builder = TestBuilder('Sales Person', 'sales_person.py', 15)
-    sales_force_builder = TestBuilder('Sales Force', 'sales_force.py', 16)
+    sales_person_builder = TestBuilder('Sales Person', person_test_file, 15)
+    sales_force_builder = TestBuilder('Sales Force', force_test_file, 16)
     sales_person_builder.add_items(
         build_sales_person_constructor_test(),
         build_sales_person_instance_variables_test(),

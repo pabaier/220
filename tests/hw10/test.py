@@ -1,12 +1,18 @@
+import os
+from pathlib import Path
+
 from helpers import build_test
 from tests.hw10.test_data import *
 from tests.test_framework import *
+
+test_file = Path(os.path.dirname(hw10.__file__)) / 'hw10.py'
+sphere_test_file = Path(os.path.dirname(hw10.__file__)) / 'sphere.py'
 
 
 def main():
     test_suit = TestSuit('HW 10')
 
-    builder = TestBuilder("hw10.py", 'hw10.py', linter_points=20, default_test_points=2)
+    builder = TestBuilder("hw10.py", test_file, linter_points=20, default_test_points=2)
     builder.add_to_blacklist({
         'for.*in.*:': 'for loops not allowed for this assignment. please remove it to continue',
     })
@@ -15,7 +21,7 @@ def main():
     builder.add_items(build_syracuse_tests(10))
     builder.add_items(build_goldbach_tests(10))
 
-    sphere_builder = TestBuilder("sphere", "sphere.py", linter_points=20, default_test_points=10)
+    sphere_builder = TestBuilder("sphere", sphere_test_file, linter_points=20, default_test_points=10)
     sphere_builder.add_items(build_sphere_constructor_tests())
     sphere_builder.add_items(build_sphere_instance_variables_tests())
     sphere_builder.add_items(build_sphere_methods_tests())

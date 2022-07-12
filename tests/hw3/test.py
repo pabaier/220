@@ -1,9 +1,14 @@
+import os
+from pathlib import Path
+
 from tests import test_framework as t
 from tests.hw3.test_data import *
 
+test_file = Path(os.path.dirname(hw3.__file__)) / 'hw3.py'
+
 
 def main():
-    builder = t.TestBuilder("hw 3", 'hw3.py', linter_points=20, default_test_points=2)
+    builder = t.TestBuilder("hw 3", test_file, linter_points=20, default_test_points=2)
     builder.add_to_blacklist({
         'if (?!__name__).*:': 'if statements not allowed for this assignment. please remove it to continue',
         'while.*:': 'while loops not allowed for this assignment. please remove it to continue',

@@ -1,10 +1,15 @@
+import os
+from pathlib import Path
+
 from helpers import build_test
 from tests import test_framework as t
 from tests.hw5.test_data import *
 
+test_file = Path(os.path.dirname(hw5.__file__)) / 'hw5.py'
+
 
 def main():
-    builder = t.TestBuilder("hw 5", 'hw5.py', linter_points=20, default_test_points=2)
+    builder = t.TestBuilder("hw 5", test_file, linter_points=20, default_test_points=2)
     builder.add_to_blacklist({
         'if (?!__name__).*:': 'if statements not allowed for this assignment. please remove it to continue',
         'while.*:': 'while loops not allowed for this assignment. please remove it to continue'
